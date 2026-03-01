@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TimeTrack" />
+  <title>TimeTrack</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+      --border: #2a2a2a; --accent: #00e5a0; --pause-color: #f5c518;
+      --text: #f0f0f0; --muted: #666; --danger: #ff4545;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { background:var(--bg); color:var(--text); font-family:'Syne',sans-serif; min-height:100vh; overflow-x:hidden; }
+    .screen { display:none; flex-direction:column; min-height:100vh; }
+    .screen.active { display:flex; }
+
+    .header { display:flex; align-items:center; justify-content:space-between; padding:52px 24px 16px; }
+    .header-title { font-size:13px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:var(--muted); }
+    .icon-btn { width:40px; height:40px; border-radius:12px; background:var(--surface2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; transition:all .15s; }
+    .icon-btn:active { transform:scale(.92); }
+
+    .status-bar { margin:0 24px 28px; padding:13px 18px; background:var(--surface); border:1px solid var(--border); border-radius:16px; display:flex; align-items:center; gap:10px; font-size:12px; font-weight:600; letter-spacing:2px; text-transform:uppercase; }
+    .status-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+    .status-dot.running { background:var(--accent); box-shadow:0 0 8px var(--accent); animation:pulse 1.5s infinite; }
+    .status-dot.paused { background:var(--pause-color); box-shadow:0 0 8px var(--pause-color); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .timer-wrap { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 24px; }
+    .timer-label { font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+    .timer-display { font-family:'Space Mono',monospace; font-size:clamp(52px,16vw,80px); font-weight:700; letter-spacing:-2px; line-height:1; color:var(--text); transition:color .3s; }
+    .timer-display.running { color:var(--accent); }
+    .timer-display.paused { color:var(--pause-color); }
+    .break-info { margin-top:16px; font-size:12px; color:var(--muted); font-family:'Space Mono',monospace; min-height:18px; text-align:center; }
+
+    .meta-row { display:flex; gap:10px; margin:20px 24px 0; }
+    .meta-card { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; }
+    .meta-card-label { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+    .meta-card-value { font-size:14px; font-weight:700; }
+
+    .btn-area { padding:20px 24px; display:flex; flex-direction:column; gap:12px; }
+    .btn-primary { width:100%; padding:20px; border-radius:18px; border:none; font-family:'Syne',sans-serif; font-size:16px; font-weight:800; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all .15s; }
+    .btn-primary:active { transform:scale(.97); }
+    .btn-start { background:var(--accent); color:#000; }
+    .btn-stop { background:var(--danger); color:#fff; }
+    .btn-pause { background:var(--pause-color); color:#000; }
+    .btn-resume { background:var(--accent); color:#000; }
+    .btn-row { display:flex; gap:12px; }
+    .btn-row .btn-primary { flex:1; }
+
+    .log-section { padding:4px 24px 100px; }
+    .log-title { font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+    .log-empty { font-size:13px; color:var(--muted); text-align:center; padding:24px 0; }
+    .log-entry { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:10px; }
+    .log-entry-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:5px; }
+    .log-entry-date { font-size:12px; font-weight:600; }
+    .log-entry-earned { font-size:14px; font-weight:800; color:var(--accent); font-family:'Space Mono',monospace; }
+    .log-entry-times { font-size:11px; color:var(--muted); font-family:'Space Mono',monospace; }
+    .log-entry-sub { font-size:11px; color:var(--muted); margin-top:3px; }
+    .sync-badge { font-size:10px; padding:2px 8px; border-radius:20px; margin-top:6px; display:inline-block; }
+    .sync-badge.synced { background:rgba(0,229,160,.15); color:var(--accent); }
+    .sync-badge.pending { background:rgba(245,197,24,.15); color:var(--pause-color); }
+
+    #settings { background:var(--bg); }
+    .settings-body { flex:1; padding:24px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; }
+    .setting-group { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+    .setting-group-label { font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); padding:14px 18px 6px; }
+    .setting-item { padding:12px 18px; border-bottom:1px solid var(--border); }
+    .setting-item:last-child { border-bottom:none; }
+    .setting-item label { display:block; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:7px; }
+    .setting-input { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:11px 14px; font-family:'Syne',sans-serif; font-size:16px; font-weight:600; color:var(--text); outline:none; transition:border-color .2s; }
+    .setting-input:focus { border-color:var(--accent); }
+    .btn-save { width:100%; padding:18px; border-radius:16px; border:none; background:var(--accent); color:#000; font-family:'Syne',sans-serif; font-size:16px; font-weight:800; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all .15s; }
+    .btn-save:active { transform:scale(.97); }
+    .sheets-bar { background:var(--surface); border:1px solid var(--accent); border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:12px; }
+    .sheets-bar-info { flex:1; }
+    .sheets-bar-title { font-size:13px; font-weight:700; color:var(--accent); }
+    .sheets-bar-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+    .connected-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent); }
+
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(6px); z-index:900; align-items:flex-end; justify-content:center; }
+    .modal-overlay.show { display:flex; }
+    .modal { background:var(--surface); border:1px solid var(--border); border-radius:24px 24px 0 0; padding:28px 24px 52px; width:100%; max-width:500px; animation:slideUp .3s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+    .modal-title { font-size:20px; font-weight:800; margin-bottom:8px; }
+    .modal-earned { font-size:36px; font-weight:800; font-family:'Space Mono',monospace; color:var(--accent); margin-bottom:6px; }
+    .modal-detail { font-size:12px; color:var(--muted); margin-bottom:24px; line-height:1.8; font-family:'Space Mono',monospace; }
+    .modal-btn { width:100%; padding:16px; border-radius:14px; border:none; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:all .15s; margin-bottom:10px; display:block; }
+    .modal-btn:active { transform:scale(.97); }
+    .modal-btn-primary { background:#34a853; color:#fff; }
+    .modal-btn-cancel { background:var(--surface2); color:var(--muted); border:1px solid var(--border); }
+
+    .sync-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); z-index:950; align-items:center; justify-content:center; flex-direction:column; gap:16px; }
+    .sync-overlay.show { display:flex; }
+    .sync-spinner { width:48px; height:48px; border-radius:50%; border:3px solid var(--border); border-top-color:var(--accent); animation:spin .8s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .sync-text { font-size:14px; font-weight:600; letter-spacing:1px; }
+
+    .toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:12px 20px; font-size:13px; font-weight:600; white-space:nowrap; transition:transform .3s cubic-bezier(.34,1.56,.64,1); z-index:1000; pointer-events:none; }
+    .toast.show { transform:translateX(-50%) translateY(0); }
+    .toast.success { border-color:var(--accent); color:var(--accent); }
+    .toast.error { border-color:var(--danger); color:var(--danger); }
+  </style>
+</head>
+<body>
+
+<!-- HOME -->
+<div class="screen active" id="home">
+  <div class="header">
+    <span class="header-title">TimeTrack</span>
+    <div class="icon-btn" onclick="goSettings()">⚙️</div>
+  </div>
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Ready to start</span>
+  </div>
+  <div class="timer-wrap">
+    <div class="timer-label">Elapsed Time</div>
+    <div class="timer-display" id="timerDisplay">00:00:00</div>
+    <div class="break-info" id="breakInfo"></div>
+  </div>
+  <div class="meta-row">
+    <div class="meta-card">
+      <div class="meta-card-label">Worker</div>
+      <div class="meta-card-value" id="metaName">Iko</div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-card-label">Rate</div>
+      <div class="meta-card-value" id="metaRate">€5.00/h</div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-card-label">Earned</div>
+      <div class="meta-card-value" id="metaEarned" style="color:var(--accent)">€0.00</div>
+    </div>
+  </div>
+  <div class="btn-area" id="btnArea">
+    <button class="btn-primary btn-start" onclick="startTimer()">▶ Start</button>
+  </div>
+  <div class="log-section">
+    <div class="log-title">Recent Sessions</div>
+    <div id="logList"><div class="log-empty">No sessions yet</div></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="screen" id="settings">
+  <div class="header">
+    <span class="header-title">Settings</span>
+    <div class="icon-btn" onclick="goHome()">✕</div>
+  </div>
+  <div class="settings-body">
+    <div class="setting-group">
+      <div class="setting-group-label">Profile</div>
+      <div class="setting-item">
+        <label>Your Name</label>
+        <input class="setting-input" id="settingName" type="text" placeholder="Enter your name" />
+      </div>
+      <div class="setting-item">
+        <label>Hourly Rate (€)</label>
+        <input class="setting-input" id="settingRate" type="number" step="0.01" placeholder="e.g. 5.00" />
+      </div>
+    </div>
+    <div class="sheets-bar">
+      <div style="font-size:22px">📊</div>
+      <div class="sheets-bar-info">
+        <div class="sheets-bar-title">Google Sheets Connected</div>
+        <div class="sheets-bar-sub">Sessions sync automatically on Stop</div>
+      </div>
+      <div class="connected-dot"></div>
+    </div>
+    <button class="btn-save" onclick="saveSettings()">Save Settings</button>
+    <div style="text-align:center;display:flex;gap:16px;justify-content:center">
+      <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="retrySyncPending()">Retry pending syncs</span>
+      <span style="font-size:11px;color:var(--muted)">·</span>
+      <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="clearAllData()">Clear history</span>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION MODAL -->
+<div class="modal-overlay" id="sessionModal">
+  <div class="modal">
+    <div class="modal-title">Session Complete ✓</div>
+    <div class="modal-earned" id="modalEarned">€0.00</div>
+    <div class="modal-detail" id="modalDetail"></div>
+    <button class="modal-btn modal-btn-primary" onclick="syncToSheets()">📊 Send to Google Sheets</button>
+    <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Save locally only</button>
+  </div>
+</div>
+
+<!-- SYNCING -->
+<div class="sync-overlay" id="syncOverlay">
+  <div class="sync-spinner"></div>
+  <div class="sync-text">Syncing to Google Sheets...</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyqZvAsFSu1NQTQE16FP3p0bk_MURAQ6neg0iIFSWHYxoIZpugGeJa2xQNcZ7zkJXIFtg/exec';
+
+let state = 'idle';
+let startTime = null, pauseStart = null;
+let totalBreakMs = 0;
+let firstBreakStart = null, lastBreakEnd = null;
+let timerInterval = null, lastSession = null;
+let settings = { name: 'Iko', rate: 5.00 };
+
+// ── SETTINGS
+function loadSettings() {
+  const s = localStorage.getItem('tt_settings');
+  if (s) settings = { ...settings, ...JSON.parse(s) };
+  document.getElementById('metaName').textContent = settings.name;
+  document.getElementById('metaRate').textContent = '€' + settings.rate.toFixed(2) + '/h';
+}
+function saveSettings() {
+  const n = document.getElementById('settingName').value.trim();
+  const r = parseFloat(document.getElementById('settingRate').value);
+  if (n) settings.name = n;
+  if (!isNaN(r) && r > 0) settings.rate = r;
+  localStorage.setItem('tt_settings', JSON.stringify(settings));
+  document.getElementById('metaName').textContent = settings.name;
+  document.getElementById('metaRate').textContent = '€' + settings.rate.toFixed(2) + '/h';
+  showToast('Settings saved!', 'success');
+  goHome();
+}
+
+// ── NAV
+function goSettings() {
+  document.getElementById('settingName').value = settings.name;
+  document.getElementById('settingRate').value = settings.rate;
+  document.getElementById('home').classList.remove('active');
+  document.getElementById('settings').classList.add('active');
+}
+function goHome() {
+  document.getElementById('settings').classList.remove('active');
+  document.getElementById('home').classList.add('active');
+}
+
+// ── TIMER
+function startTimer() {
+  state = 'running';
+  startTime = new Date();
+  totalBreakMs = 0; pauseStart = null;
+  firstBreakStart = null; lastBreakEnd = null;
+  timerInterval = setInterval(tick, 500);
+  updateUI();
+  showToast('Timer started', 'success');
+}
+function pauseTimer() {
+  state = 'paused';
+  pauseStart = new Date();
+  if (!firstBreakStart) firstBreakStart = pauseStart;
+  updateUI();
+  showToast('Break started ☕');
+}
+function resumeTimer() {
+  const breakEnd = new Date();
+  totalBreakMs += breakEnd - pauseStart;
+  lastBreakEnd = breakEnd;
+  pauseStart = null;
+  state = 'running';
+  updateUI();
+  showToast('Back to work! 💪', 'success');
+}
+function stopTimer() {
+  if (state === 'paused') {
+    const be = new Date();
+    totalBreakMs += be - pauseStart;
+    lastBreakEnd = be; pauseStart = null;
+  }
+  clearInterval(timerInterval); timerInterval = null;
+  const stopTime = new Date();
+  state = 'idle';
+
+  const workedMs = Math.max(0, (stopTime - startTime) - totalBreakMs);
+  const workedHours = workedMs / 3600000;
+  const earned = workedHours * settings.rate;
+
+  lastSession = {
+    name: settings.name,
+    date: formatDate(startTime),
+    startTime: formatTime(startTime),
+    stopTime: formatTime(stopTime),
+    breakStart: firstBreakStart ? formatTime(firstBreakStart) : '-',
+    breakEnd: lastBreakEnd ? formatTime(lastBreakEnd) : '-',
+    workedMs, workedHours, earned,
+    rate: settings.rate, synced: false, ts: Date.now()
+  };
+
+  saveSession(lastSession);
+  renderLog();
+
+  // Reset display
+  document.getElementById('timerDisplay').textContent = '00:00:00';
+  document.getElementById('timerDisplay').className = 'timer-display';
+  document.getElementById('breakInfo').textContent = '';
+  document.getElementById('metaEarned').textContent = '€0.00';
+  updateStatus('idle'); renderBtns('idle');
+
+  // Show modal
+  document.getElementById('modalEarned').textContent = '€' + earned.toFixed(2);
+  document.getElementById('modalDetail').textContent =
+    `Date: ${formatDate(startTime)}\nStart: ${formatTime(startTime)}\nEnd: ${formatTime(stopTime)}` +
+    (firstBreakStart ? `\nBreak: ${formatTime(firstBreakStart)} → ${lastBreakEnd ? formatTime(lastBreakEnd) : '?'}` : '') +
+    `\nWorked: ${formatDuration(workedMs)}`;
+  document.getElementById('sessionModal').classList.add('show');
+}
+
+function tick() {
+  if (state !== 'running') return;
+  const elapsed = (new Date() - startTime) - totalBreakMs;
+  document.getElementById('timerDisplay').textContent = formatDuration(elapsed);
+  document.getElementById('metaEarned').textContent = '€' + ((elapsed / 3600000) * settings.rate).toFixed(2);
+}
+
+// ── UI
+function updateUI() {
+  updateStatus(state); renderBtns(state);
+  const td = document.getElementById('timerDisplay');
+  td.className = 'timer-display' + (state === 'running' ? ' running' : state === 'paused' ? ' paused' : '');
+  if (state === 'paused') {
+    const iv = setInterval(() => {
+      if (state !== 'paused') { clearInterval(iv); document.getElementById('breakInfo').textContent = ''; return; }
+      document.getElementById('breakInfo').textContent = 'Break: ' + formatDuration(new Date() - pauseStart);
+    }, 500);
+  }
+}
+function updateStatus(s) {
+  document.getElementById('statusDot').className = 'status-dot' + (s === 'running' ? ' running' : s === 'paused' ? ' paused' : '');
+  document.getElementById('statusText').textContent = s === 'running' ? 'Working — timer running' : s === 'paused' ? 'On break — timer paused' : 'Ready to start';
+}
+function renderBtns(s) {
+  const a = document.getElementById('btnArea');
+  if (s === 'idle') a.innerHTML = `<button class="btn-primary btn-start" onclick="startTimer()">▶ Start</button>`;
+  else if (s === 'running') a.innerHTML = `<div class="btn-row"><button class="btn-primary btn-pause" onclick="pauseTimer()">⏸ Pause</button><button class="btn-primary btn-stop" onclick="stopTimer()">■ Stop</button></div>`;
+  else if (s === 'paused') a.innerHTML = `<div class="btn-row"><button class="btn-primary btn-resume" onclick="resumeTimer()">▶ Resume</button><button class="btn-primary btn-stop" onclick="stopTimer()">■ Stop</button></div>`;
+}
+
+// ── SHEETS SYNC
+async function syncToSheets(session) {
+  const s = session || lastSession;
+  if (!s) return;
+  document.getElementById('sessionModal').classList.remove('show');
+  document.getElementById('syncOverlay').classList.add('show');
+
+  const row = [s.name, s.date, s.startTime, s.stopTime, s.breakStart, s.breakEnd,
+    parseFloat(s.workedHours.toFixed(4)), parseFloat(s.earned.toFixed(2))];
+
+  try {
+    await fetch(SHEETS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({ row }),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    markSynced(s.ts); renderLog();
+    document.getElementById('syncOverlay').classList.remove('show');
+    showToast('Saved to Google Sheets! ✓', 'success');
+  } catch(e) {
+    document.getElementById('syncOverlay').classList.remove('show');
+    showToast('Sync failed — saved locally', 'error');
+  }
+}
+
+async function retrySyncPending() {
+  const pending = getLog().filter(s => !s.synced);
+  if (!pending.length) { showToast('No pending sessions'); return; }
+  showToast('Retrying ' + pending.length + ' session(s)...');
+  for (const s of pending) { await syncToSheets(s); await new Promise(r => setTimeout(r, 600)); }
+}
+
+// ── STORAGE
+function saveSession(s) {
+  const log = getLog(); log.unshift(s);
+  localStorage.setItem('tt_log', JSON.stringify(log.slice(0, 100)));
+}
+function markSynced(ts) {
+  const log = getLog(); const i = log.findIndex(s => s.ts === ts);
+  if (i >= 0) { log[i].synced = true; localStorage.setItem('tt_log', JSON.stringify(log)); }
+}
+function getLog() { const l = localStorage.getItem('tt_log'); return l ? JSON.parse(l) : []; }
+function renderLog() {
+  const log = getLog(); const el = document.getElementById('logList');
+  if (!log.length) { el.innerHTML = '<div class="log-empty">No sessions yet</div>'; return; }
+  el.innerHTML = log.slice(0,6).map(s => `
+    <div class="log-entry">
+      <div class="log-entry-top">
+        <div class="log-entry-date">${s.date} · ${s.name}</div>
+        <div class="log-entry-earned">€${s.earned.toFixed(2)}</div>
+      </div>
+      <div class="log-entry-times">${s.startTime} → ${s.stopTime}</div>
+      <div class="log-entry-sub">${formatDuration(s.workedMs)} worked${s.breakStart !== '-' ? ' · break ' + s.breakStart + '–' + s.breakEnd : ''}</div>
+      <span class="sync-badge ${s.synced ? 'synced' : 'pending'}">${s.synced ? '✓ Synced to Sheets' : '⏳ Pending sync'}</span>
+    </div>`).join('');
+}
+function clearAllData() {
+  if (confirm('Delete all session history from this device?')) { localStorage.removeItem('tt_log'); renderLog(); showToast('History cleared'); }
+}
+function closeModal() { document.getElementById('sessionModal').classList.remove('show'); }
+
+// ── UTILS
+function formatDuration(ms) {
+  const s = Math.floor(Math.max(0,ms)/1000);
+  return pad(Math.floor(s/3600))+':'+pad(Math.floor((s%3600)/60))+':'+pad(s%60);
+}
+function pad(n) { return String(n).padStart(2,'0'); }
+function formatDate(d) { return d.toLocaleDateString('en-GB'); }
+function formatTime(d) { return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show' + (type ? ' '+type : '');
+  clearTimeout(t._to); t._to = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── INIT
+loadSettings(); renderLog();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body>
+</html>
